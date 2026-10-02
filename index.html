@@ -1,38 +1,1161 @@
-create table public.websites (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  name text not null,
-  content jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Website Builder</title>
 
-alter table public.websites enable row level security;
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-revoke all on table public.websites from anon;
-grant select, insert, update, delete on table public.websites to authenticated;
+<style>
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
-create policy "Users can view their own websites"
-on public.websites
-for select
-to authenticated
-using ((select auth.uid()) = user_id);
+body {
+  font-family: Arial, sans-serif;
+  background: #f7f8fc;
+  color: #111827;
+}
 
-create policy "Users can create their own websites"
-on public.websites
-for insert
-to authenticated
-with check ((select auth.uid()) = user_id);
+button {
+  cursor: pointer;
+  border: 0;
+}
 
-create policy "Users can update their own websites"
-on public.websites
-for update
-to authenticated
-using ((select auth.uid()) = user_id)
-with check ((select auth.uid()) = user_id);
+.navbar {
+  height: 70px;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6%;
+}
 
-create policy "Users can delete their own websites"
-on public.websites
-for delete
-to authenticated
-using ((select auth.uid()) = user_id);
+.logo {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.nav-links {
+  display: flex;
+  gap: 25px;
+  align-items: center;
+}
+
+.nav-links button {
+  background: none;
+  font-size: 15px;
+  color: #374151;
+}
+
+.primary {
+  background: #111827 !important;
+  color: white !important;
+  padding: 12px 20px;
+  border-radius: 9px;
+  font-weight: bold;
+}
+
+.hero {
+  text-align: center;
+  padding: 100px 20px;
+  background: linear-gradient(135deg, #ffffff, #eef2ff);
+}
+
+.hero h1 {
+  font-size: 56px;
+  max-width: 800px;
+  margin: auto;
+  line-height: 1.05;
+}
+
+.hero p {
+  max-width: 650px;
+  margin: 25px auto;
+  font-size: 19px;
+  color: #6b7280;
+}
+
+.hero button {
+  font-size: 17px;
+  padding: 15px 25px;
+  border-radius: 10px;
+}
+
+.features {
+  padding: 70px 6%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 25px;
+}
+
+.card {
+  background: white;
+  padding: 30px;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+}
+
+.card h3 {
+  margin-bottom: 10px;
+}
+
+.card p {
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.section {
+  padding: 70px 6%;
+}
+
+.section h2 {
+  font-size: 36px;
+  margin-bottom: 30px;
+}
+
+.templates {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.template {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 15px;
+  padding: 25px;
+}
+
+.template button {
+  margin-top: 15px;
+  background: #111827;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+}
+
+.pricing {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.price {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 15px;
+  padding: 30px;
+}
+
+.price h3 {
+  font-size: 22px;
+}
+
+.price strong {
+  display: block;
+  font-size: 35px;
+  margin: 15px 0;
+}
+
+.modal-bg {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal {
+  width: 100%;
+  max-width: 430px;
+  background: white;
+  padding: 30px;
+  border-radius: 18px;
+}
+
+.modal h2 {
+  margin-bottom: 20px;
+}
+
+.input {
+  width: 100%;
+  padding: 13px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 15px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.modal-actions button {
+  padding: 12px;
+  border-radius: 8px;
+  flex: 1;
+}
+
+.close {
+  background: #e5e7eb;
+}
+
+.dashboard {
+  display: none;
+  padding: 50px 6%;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.website-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.website-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 15px;
+  padding: 25px;
+}
+
+.website-card button {
+  margin-top: 15px;
+  margin-right: 6px;
+  padding: 9px 13px;
+  border-radius: 7px;
+  background: #111827;
+  color: white;
+}
+
+.builder {
+  display: none;
+  padding: 40px 6%;
+}
+
+.builder-box {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 30px;
+  max-width: 900px;
+  margin: auto;
+}
+
+.builder textarea {
+  width: 100%;
+  height: 150px;
+  padding: 15px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  resize: vertical;
+  font-size: 16px;
+  margin: 15px 0;
+}
+
+.preview {
+  margin-top: 25px;
+  padding: 30px;
+  min-height: 250px;
+  border-radius: 12px;
+  background: #111827;
+  color: white;
+}
+
+.message {
+  margin-top: 15px;
+  padding: 12px;
+  border-radius: 8px;
+  display: none;
+}
+
+.success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+footer {
+  text-align: center;
+  padding: 50px;
+  color: #6b7280;
+}
+
+@media(max-width: 800px) {
+  .nav-links {
+    gap: 8px;
+  }
+
+  .nav-links button:nth-child(1),
+  .nav-links button:nth-child(2) {
+    display: none;
+  }
+
+  .hero h1 {
+    font-size: 40px;
+  }
+
+  .features,
+  .templates,
+  .pricing,
+  .website-list {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<nav class="navbar">
+  <div class="logo">WebsiteBuilder</div>
+
+  <div class="nav-links">
+    <button onclick="showSection('templates')">Templates</button>
+    <button onclick="showSection('pricing')">Pricing</button>
+    <button onclick="openLogin()">Login</button>
+    <button class="primary" onclick="openSignup()">Sign Up</button>
+  </div>
+</nav>
+
+<section class="hero" id="home">
+  <h1>Build your website without coding.</h1>
+
+  <p>
+    Create beautiful websites with an easy editor,
+    powerful templates and AI.
+  </p>
+
+  <button class="primary" onclick="startBuilder()">
+    Create a Website
+  </button>
+</section>
+
+<section class="features">
+  <div class="card">
+    <h3>Easy Editor</h3>
+    <p>Create and customize your website without writing code.</p>
+  </div>
+
+  <div class="card">
+    <h3>Beautiful Templates</h3>
+    <p>Start with a professional template and customize it.</p>
+  </div>
+
+  <div class="card">
+    <h3>AI Website Builder</h3>
+    <p>Describe your idea and generate a website automatically.</p>
+  </div>
+</section>
+
+<section class="section" id="templates">
+  <h2>Templates</h2>
+
+  <div class="templates">
+
+    <div class="template">
+      <h3>Modern Business</h3>
+      <p>Professional website for a business.</p>
+      <button onclick="useTemplate('Modern Business')">
+        Use Template
+      </button>
+    </div>
+
+    <div class="template">
+      <h3>Gaming</h3>
+      <p>Dark gaming website with modern sections.</p>
+      <button onclick="useTemplate('Gaming')">
+        Use Template
+      </button>
+    </div>
+
+    <div class="template">
+      <h3>Portfolio</h3>
+      <p>Simple portfolio for creators and developers.</p>
+      <button onclick="useTemplate('Portfolio')">
+        Use Template
+      </button>
+    </div>
+
+  </div>
+</section>
+
+<section class="section" id="pricing">
+  <h2>Pricing</h2>
+
+  <div class="pricing">
+
+    <div class="price">
+      <h3>Free</h3>
+      <strong>$0</strong>
+      <p>Basic website building.</p>
+    </div>
+
+    <div class="price">
+      <h3>Pro</h3>
+      <strong>$9</strong>
+      <p>More websites and advanced tools.</p>
+    </div>
+
+    <div class="price">
+      <h3>Business</h3>
+      <strong>$29</strong>
+      <p>Advanced features for businesses.</p>
+    </div>
+
+  </div>
+</section>
+
+<section class="dashboard" id="dashboard">
+
+  <div class="dashboard-header">
+    <div>
+      <h2>Dashboard</h2>
+      <p id="userEmail"></p>
+    </div>
+
+    <button class="primary" onclick="logout()">
+      Logout
+    </button>
+  </div>
+
+  <button class="primary" onclick="startBuilder()">
+    + Create Website
+  </button>
+
+  <div class="website-list" id="websiteList"></div>
+
+</section>
+
+<section class="builder" id="builder">
+
+  <div class="builder-box">
+
+    <h2>AI Website Builder</h2>
+
+    <p>
+      Describe the website you want to create.
+    </p>
+
+    <textarea id="prompt"
+      placeholder="Example: Create a modern gaming website called NightZone with a dark design..."></textarea>
+
+    <input
+      class="input"
+      id="websiteName"
+      placeholder="Website name"
+    >
+
+    <button class="primary" onclick="generateDemoWebsite()">
+      ✨ Generate Website
+    </button>
+
+    <button
+      style="padding:12px 18px;border-radius:8px;margin-left:8px;"
+      onclick="saveWebsite()">
+      💾 Save Website
+    </button>
+
+    <div class="preview" id="preview">
+      Your generated website will appear here.
+    </div>
+
+    <div id="builderMessage" class="message"></div>
+
+  </div>
+
+</section>
+
+<footer>
+  © 2026 WebsiteBuilder
+</footer>
+
+
+<!-- LOGIN -->
+
+<div class="modal-bg" id="loginModal">
+
+  <div class="modal">
+
+    <h2>Login</h2>
+
+    <input
+      class="input"
+      id="loginEmail"
+      type="email"
+      placeholder="Email"
+    >
+
+    <input
+      class="input"
+      id="loginPassword"
+      type="password"
+      placeholder="Password"
+    >
+
+    <div class="modal-actions">
+
+      <button class="primary" onclick="login()">
+        Login
+      </button>
+
+      <button class="close" onclick="closeModals()">
+        Cancel
+      </button>
+
+    </div>
+
+    <div id="loginMessage" class="message"></div>
+
+  </div>
+
+</div>
+
+
+<!-- SIGN UP -->
+
+<div class="modal-bg" id="signupModal">
+
+  <div class="modal">
+
+    <h2>Create Account</h2>
+
+    <input
+      class="input"
+      id="signupEmail"
+      type="email"
+      placeholder="Email"
+    >
+
+    <input
+      class="input"
+      id="signupPassword"
+      type="password"
+      placeholder="Password"
+    >
+
+    <div class="modal-actions">
+
+      <button class="primary" onclick="signup()">
+        Sign Up
+      </button>
+
+      <button class="close" onclick="closeModals()">
+        Cancel
+      </button>
+
+    </div>
+
+    <div id="signupMessage" class="message"></div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+/* =========================
+   SUPABASE CONFIG
+========================= */
+
+const SUPABASE_URL = "https://lauglxtyngymlfptlvnu.supabase.co";
+
+const SUPABASE_KEY = "sb_publishable_GIOwlt2-Vu7RfHaKOT4gpQ_Ekg36MiJ";
+
+const supabaseClient =
+  window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+  );
+
+
+/* =========================
+   NAVIGATION
+========================= */
+
+function showSection(id) {
+
+  document
+    .getElementById(id)
+    .scrollIntoView({
+      behavior: "smooth"
+    });
+}
+
+
+function openLogin() {
+
+  document.getElementById("loginModal").style.display = "flex";
+
+}
+
+
+function openSignup() {
+
+  document.getElementById("signupModal").style.display = "flex";
+
+}
+
+
+function closeModals() {
+
+  document.getElementById("loginModal").style.display = "none";
+
+  document.getElementById("signupModal").style.display = "none";
+
+}
+
+
+function startBuilder() {
+
+  document.getElementById("home").style.display = "none";
+
+  document.querySelector(".features").style.display = "none";
+
+  document.getElementById("builder").style.display = "block";
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
+
+}
+
+
+/* =========================
+   SIGN UP
+========================= */
+
+async function signup() {
+
+  const email =
+    document.getElementById("signupEmail").value.trim();
+
+  const password =
+    document.getElementById("signupPassword").value;
+
+  const message =
+    document.getElementById("signupMessage");
+
+  if (!email || !password) {
+
+    showMessage(
+      message,
+      "Please enter an email and password.",
+      false
+    );
+
+    return;
+  }
+
+  const { data, error } =
+    await supabaseClient.auth.signUp({
+      email: email,
+      password: password
+    });
+
+  if (error) {
+
+    showMessage(
+      message,
+      error.message,
+      false
+    );
+
+    return;
+  }
+
+  showMessage(
+    message,
+    "Account created successfully. Check your email if confirmation is required.",
+    true
+  );
+
+}
+
+
+/* =========================
+   LOGIN
+========================= */
+
+async function login() {
+
+  const email =
+    document.getElementById("loginEmail").value.trim();
+
+  const password =
+    document.getElementById("loginPassword").value;
+
+  const message =
+    document.getElementById("loginMessage");
+
+  if (!email || !password) {
+
+    showMessage(
+      message,
+      "Please enter your email and password.",
+      false
+    );
+
+    return;
+  }
+
+  const { data, error } =
+    await supabaseClient.auth.signInWithPassword({
+      email: email,
+      password: password
+    });
+
+  if (error) {
+
+    showMessage(
+      message,
+      error.message,
+      false
+    );
+
+    return;
+  }
+
+  closeModals();
+
+  showDashboard(data.user);
+
+}
+
+
+/* =========================
+   LOGOUT
+========================= */
+
+async function logout() {
+
+  await supabaseClient.auth.signOut();
+
+  document.getElementById("dashboard").style.display = "none";
+
+  document.getElementById("builder").style.display = "none";
+
+  document.getElementById("home").style.display = "block";
+
+  document.querySelector(".features").style.display = "grid";
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
+
+}
+
+
+/* =========================
+   DASHBOARD
+========================= */
+
+async function showDashboard(user) {
+
+  document.getElementById("home").style.display = "none";
+
+  document.querySelector(".features").style.display = "none";
+
+  document.getElementById("templates").style.display = "none";
+
+  document.getElementById("pricing").style.display = "none";
+
+  document.getElementById("builder").style.display = "none";
+
+  document.getElementById("dashboard").style.display = "block";
+
+  document.getElementById("userEmail").textContent =
+    "Logged in as: " + user.email;
+
+  await loadWebsites();
+
+}
+
+
+/* =========================
+   LOAD WEBSITES
+========================= */
+
+async function loadWebsites() {
+
+  const list =
+    document.getElementById("websiteList");
+
+  list.innerHTML = "<p>Loading websites...</p>";
+
+  const {
+    data: websites,
+    error
+  } = await supabaseClient
+    .from("websites")
+    .select("*")
+    .order("updated_at", {
+      ascending: false
+    });
+
+  if (error) {
+
+    list.innerHTML =
+      "<p>Could not load websites.</p>";
+
+    console.error(error);
+
+    return;
+  }
+
+  if (!websites || websites.length === 0) {
+
+    list.innerHTML =
+      "<p>You haven't created any websites yet.</p>";
+
+    return;
+  }
+
+  list.innerHTML = "";
+
+  websites.forEach(site => {
+
+    const card =
+      document.createElement("div");
+
+    card.className = "website-card";
+
+    card.innerHTML = `
+      <h3>${escapeHtml(site.name)}</h3>
+      <p>Created: ${new Date(site.created_at).toLocaleDateString()}</p>
+
+      <button onclick="openWebsite('${site.id}')">
+        Open
+      </button>
+
+      <button onclick="deleteWebsite('${site.id}')">
+        Delete
+      </button>
+    `;
+
+    list.appendChild(card);
+
+  });
+
+}
+
+
+/* =========================
+   SAVE WEBSITE
+========================= */
+
+async function saveWebsite() {
+
+  const name =
+    document.getElementById("websiteName").value.trim();
+
+  const prompt =
+    document.getElementById("prompt").value.trim();
+
+  const preview =
+    document.getElementById("preview").innerHTML;
+
+  const message =
+    document.getElementById("builderMessage");
+
+  if (!name) {
+
+    showMessage(
+      message,
+      "Please enter a website name.",
+      false
+    );
+
+    return;
+  }
+
+  const {
+    data: { user }
+  } = await supabaseClient.auth.getUser();
+
+  if (!user) {
+
+    showMessage(
+      message,
+      "Please login before saving a website.",
+      false
+    );
+
+    return;
+  }
+
+  const {
+    data,
+    error
+  } = await supabaseClient
+    .from("websites")
+    .insert({
+      user_id: user.id,
+      name: name,
+      content: {
+        prompt: prompt,
+        preview: preview
+      }
+    })
+    .select()
+    .single();
+
+  if (error) {
+
+    showMessage(
+      message,
+      error.message,
+      false
+    );
+
+    return;
+  }
+
+  showMessage(
+    message,
+    "Website saved successfully!",
+    true
+  );
+
+}
+
+
+/* =========================
+   OPEN WEBSITE
+========================= */
+
+async function openWebsite(id) {
+
+  const {
+    data: site,
+    error
+  } = await supabaseClient
+    .from("websites")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error) {
+
+    alert(error.message);
+
+    return;
+  }
+
+  document.getElementById("dashboard").style.display = "none";
+
+  document.getElementById("builder").style.display = "block";
+
+  document.getElementById("websiteName").value =
+    site.name;
+
+  document.getElementById("prompt").value =
+    site.content.prompt || "";
+
+  document.getElementById("preview").innerHTML =
+    site.content.preview || "";
+
+}
+
+
+/* =========================
+   DELETE WEBSITE
+========================= */
+
+async function deleteWebsite(id) {
+
+  if (!confirm("Delete this website?")) {
+    return;
+  }
+
+  const {
+    error
+  } = await supabaseClient
+    .from("websites")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+
+    alert(error.message);
+
+    return;
+  }
+
+  await loadWebsites();
+
+}
+
+
+/* =========================
+   DEMO AI GENERATOR
+========================= */
+
+function generateDemoWebsite() {
+
+  const prompt =
+    document.getElementById("prompt").value.trim();
+
+  const name =
+    document.getElementById("websiteName").value.trim()
+    || "My Website";
+
+  if (!prompt) {
+
+    alert("Describe the website you want to create.");
+
+    return;
+  }
+
+  document.getElementById("preview").innerHTML = `
+
+    <div style="text-align:center;padding:30px">
+
+      <h1 style="font-size:42px;margin-bottom:15px">
+        ${escapeHtml(name)}
+      </h1>
+
+      <p style="font-size:18px;opacity:.8">
+        ${escapeHtml(prompt)}
+      </p>
+
+      <div style="
+        display:flex;
+        justify-content:center;
+        gap:10px;
+        margin-top:25px;
+        flex-wrap:wrap;
+      ">
+
+        <span style="
+          background:white;
+          color:#111827;
+          padding:10px 18px;
+          border-radius:8px;
+        ">
+          Home
+        </span>
+
+        <span style="
+          background:white;
+          color:#111827;
+          padding:10px 18px;
+          border-radius:8px;
+        ">
+          About
+        </span>
+
+        <span style="
+          background:white;
+          color:#111827;
+          padding:10px 18px;
+          border-radius:8px;
+        ">
+          Contact
+        </span>
+
+      </div>
+
+    </div>
+
+  `;
+
+}
+
+
+/* =========================
+   TEMPLATES
+========================= */
+
+function useTemplate(name) {
+
+  document.getElementById("websiteName").value =
+    name + " Website";
+
+  document.getElementById("prompt").value =
+    "Create a professional " +
+    name +
+    " website with a modern design.";
+
+  startBuilder();
+
+}
+
+
+/* =========================
+   HELPERS
+========================= */
+
+function showMessage(element, text, success) {
+
+  element.textContent = text;
+
+  element.className =
+    "message " +
+    (success ? "success" : "error");
+
+  element.style.display = "block";
+
+}
+
+
+function escapeHtml(text) {
+
+  const div =
+    document.createElement("div");
+
+  div.textContent = text;
+
+  return div.innerHTML;
+
+}
+
+
+/* =========================
+   CHECK CURRENT LOGIN
+========================= */
+
+async function checkUser() {
+
+  const {
+    data: { user }
+  } = await supabaseClient.auth.getUser();
+
+  if (user) {
+
+    showDashboard(user);
+
+  }
+
+}
+
+
+checkUser();
+
+</script>
+
+</body>
+</html>
